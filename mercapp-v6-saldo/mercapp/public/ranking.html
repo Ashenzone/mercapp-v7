@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Ranking · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div><h1>Ranking</h1><div class="sub">Quem esta se saindo melhor na simulacao.</div></div>
+    </div>
+
+    <div class="section-title">🏆 Maior faturamento</div>
+    <div id="faturamento"></div>
+
+    <div class="section-title">🔥 Produto mais vendido</div>
+    <div id="vendidos"></div>
+
+    <div class="section-title">⭐ Melhor avaliacao</div>
+    <div id="avaliacao"></div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+function linha(pos, titulo, valor) {
+  return `<div class="list-row"><div><strong>#${pos}</strong> &nbsp; ${titulo}</div><span class="num stat">${valor}</span></div>`;
+}
+
+async function carregar() {
+  const resp = await fetch(`${API}/ranking`);
+  const r = await resp.json();
+
+  document.getElementById('faturamento').innerHTML = r.maior_faturamento
+    .map((c, i) => linha(i + 1, c.name, c.receita.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })))
+    .join('') || '<div class="empty">Sem dados ainda.</div>';
+
+  document.getElementById('vendidos').innerHTML = r.produto_mais_vendido
+    .map((p, i) => linha(i + 1, p.name, `${p.sales_count} vendas`))
+    .join('') || '<div class="empty">Sem dados ainda.</div>';
+
+  document.getElementById('avaliacao').innerHTML = r.melhor_avaliacao
+    .map((p, i) => linha(i + 1, p.name, `★ ${Number(p.rating_avg).toFixed(1)} (${p.rating_count})`))
+    .join('') || '<div class="empty">Ainda sem produtos com avaliacoes suficientes.</div>';
+}
+carregar();
+</script>
+</body>
+</html>

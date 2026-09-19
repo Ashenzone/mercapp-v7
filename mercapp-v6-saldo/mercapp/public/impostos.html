@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Impostos e Contas · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Impostos e Contas</h1>
+        <div class="sub">Todo fim de mes no jogo (7 dias) fecha a conta: aluguel, energia, agua, internet, salarios e impostos.</div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="section-title">Contas por mes</div>
+    <div id="contas"></div>
+
+    <div class="section-title">Impostos apurados</div>
+    <table>
+      <thead><tr><th>Mes</th><th>Imposto</th><th>Base</th><th>Valor</th><th>Status</th></tr></thead>
+      <tbody id="tabela-impostos"></tbody>
+    </table>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+const NOMES = {
+  simples: 'Simples Nacional', icms: 'ICMS (produto fisico)', iss: 'ISS (servicos)',
+  irpj: 'IRPJ (lucro)', inss: 'INSS patronal (folha)', importacao: 'Venda internacional',
+};
+
+async function pagar(id) {
+  const resp = await fetch(`${API}/financas/contas/${id}/pagar`, { method: 'POST' });
+  const d = await resp.json();
+  if (resp.ok) { toast('Contas pagas!'); carregar(); atualizarSaldoSidebar(); }
+  else toast(d.erro || 'Erro ao pagar.');
+}
+
+async function carregar() {
+  const companyId = await garantirEmpresa();
+  const [cResp, iResp] = await Promise.all([
+    fetch(`${API}/financas/contas/${companyId}`),
+    fetch(`${API}/financas/impostos/${companyId}`),
+  ]);
+  const contas = await cResp.json();
+  const imp = await iResp.json();
+
+  const aberto = contas.filter((c) => c.status !== 'pago').reduce((s, c) => s + Number(c.total_cents), 0);
+  const atrasadas = contas.filter((c) => c.status === 'atrasado').length;
+
+  document.getElementById('kpis').innerHTML =
+    `<div class="kpi"><div class="label">Em aberto</div><div class="value num ${aberto > 0 ? 'down' : ''}">${formatarPreco(aberto)}</div></div>
+     <div class="kpi"><div class="label">Contas atrasadas</div><div class="value num ${atrasadas > 0 ? 'down' : ''}">${atrasadas}</div></div>
+     <div class="kpi"><div class="label">Impostos em aberto</div><div class="value num">${formatarPreco(imp.total_aberto_cents)}</div></div>`;
+
+  document.getElementById('contas').innerHTML = contas.length
+    ? contas.map((c) => `
+        <div class="card" style="margin-bottom:10px;"><div class="body">
+          <div class="meta" style="border:none;padding:0;">
+            <strong>Mes ${c.game_month}</strong>
+            <span class="status-pill ${c.status === 'pago' ? 'active' : c.status === 'atrasado' ? 'draft' : 'paused'}">${c.status}</span>
+          </div>
+          <div style="font-size:13px;color:var(--text-dim);line-height:1.8;margin-top:6px;">
+            Aluguel: <span class="num">${formatarPreco(c.rent_cents)}</span> ·
+            Energia: <span class="num">${formatarPreco(c.energy_cents)}</span> ·
+            Agua: <span class="num">${formatarPreco(c.water_cents)}</span><br>
+            Internet: <span class="num">${formatarPreco(c.internet_cents)}</span> ·
+            Salarios: <span class="num">${formatarPreco(c.salaries_cents)}</span> ·
+            Impostos: <span class="num">${formatarPreco(c.taxes_cents)}</span>
+          </div>
+          <div class="meta">
+            <span class="price num">${formatarPreco(c.total_cents)}</span>
+            ${c.status !== 'pago' ? `<button class="btn" style="padding:6px 12px;font-size:12px;" onclick="pagar('${c.id}')">Pagar</button>` : ''}
+          </div>
+        </div></div>`).join('')
+    : '<div class="empty">Nenhuma conta fechada ainda. O primeiro fechamento acontece quando virar o mes no jogo (7 dias de jogo).</div>';
+
+  document.getElementById('tabela-impostos').innerHTML = imp.impostos.length
+    ? imp.impostos.map((t) => `
+        <tr>
+          <td>${t.game_month}</td>
+          <td>${NOMES[t.kind] || t.kind}</td>
+          <td class="num-col">${formatarPreco(t.base_cents)}</td>
+          <td class="num-col">${formatarPreco(t.amount_cents)}</td>
+          <td><span class="status-pill ${t.status === 'pago' ? 'active' : 'draft'}">${t.status}</span></td>
+        </tr>`).join('')
+    : '<tr><td colspan="5">Nenhum imposto apurado ainda.</td></tr>';
+}
+carregar();
+</script>
+</body>
+</html>

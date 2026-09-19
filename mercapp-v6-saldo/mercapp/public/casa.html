@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Casa · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Casa e Moveis</h1>
+        <div class="sub">Moveis melhores aumentam sua produtividade, mas pesam nas contas do fim do mes.</div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="section-title">Sua moradia</div>
+    <div id="moradia"></div>
+
+    <div class="section-title">Seus moveis</div>
+    <div id="meus"></div>
+
+    <div class="section-title">Loja de moveis</div>
+    <div class="grid" id="catalogo"></div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+let companyId;
+
+function cardMovel(f) {
+  return `
+    <div class="card">
+      <div class="body">
+        <div class="cat">${f.category}</div>
+        <h3>${f.name}</h3>
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.7;">
+          Energia: <span class="num">${formatarPreco(f.energy_cents)}</span>/mes<br>
+          ${Number(f.water_cents) > 0 ? `Agua: <span class="num">${formatarPreco(f.water_cents)}</span>/mes<br>` : ''}
+          Conforto +${f.comfort} · Produtividade +${Number(f.productivity_pct).toFixed(1)}%
+        </div>
+        <div class="meta">
+          <span class="price num">${formatarPreco(f.price_cents)}</span>
+          <button class="btn" style="padding:6px 12px;font-size:12px;" onclick="comprar(${f.id})">Comprar</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function comprar(id) {
+  const resp = await fetch(`${API}/financas/casa/${companyId}/comprar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ furniture_id: id }),
+  });
+  const d = await resp.json();
+  if (resp.ok) { toast('Movel comprado!'); carregar(); atualizarSaldoSidebar(); }
+  else toast(d.erro || 'Erro ao comprar.');
+}
+
+async function mudar(indice) {
+  const resp = await fetch(`${API}/financas/casa/${companyId}/mudar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ indice }),
+  });
+  const d = await resp.json();
+  if (resp.ok) { toast('Voce se mudou!'); carregar(); atualizarSaldoSidebar(); }
+  else toast(d.erro || 'Erro ao mudar.');
+}
+
+async function carregar() {
+  companyId = await garantirEmpresa();
+  const [cResp, opResp] = await Promise.all([
+    fetch(`${API}/financas/casa/${companyId}`),
+    fetch(`${API}/financas/casas-disponiveis`),
+  ]);
+  const d = await cResp.json();
+  const opcoes = await opResp.json();
+
+  document.getElementById('kpis').innerHTML =
+    `<div class="kpi"><div class="label">Energia/mes</div><div class="value num">${formatarPreco(d.resumo.energia_cents)}</div></div>
+     <div class="kpi"><div class="label">Agua/mes</div><div class="value num">${formatarPreco(d.resumo.agua_cents)}</div></div>
+     <div class="kpi"><div class="label">Conforto</div><div class="value num">${d.resumo.conforto}</div></div>
+     <div class="kpi"><div class="label">Produtividade</div><div class="value num up">+${d.resumo.produtividade_pct.toFixed(1)}%</div></div>`;
+
+  document.getElementById('moradia').innerHTML = `
+    <div class="panel" style="margin-bottom:12px;">
+      <strong>${d.casa.name}</strong>
+      <div class="stat">${d.casa.kind === 'aluguel' ? `Aluguel: ${formatarPreco(d.casa.rent_cents)}/mes` : 'Imovel proprio (sem aluguel)'}</div>
+    </div>
+    ${opcoes.map((o, i) => `
+      <div class="list-row">
+        <div><strong>${o.name}</strong><br><span class="stat">${o.rent_cents > 0 ? `${formatarPreco(o.rent_cents)}/mes de aluguel` : `compra unica de ${formatarPreco(o.price_cents)}, sem aluguel`}</span></div>
+        <button class="btn secondary" style="padding:6px 12px;font-size:12px;" onclick="mudar(${i})">Mudar</button>
+      </div>`).join('')}`;
+
+  document.getElementById('meus').innerHTML = d.meus_moveis.length
+    ? d.meus_moveis.map((f) => `
+        <div class="list-row">
+          <div><strong>${f.name}</strong><br><span class="stat">${f.category} · +${Number(f.productivity_pct).toFixed(1)}% produtividade</span></div>
+          <span class="num stat">${formatarPreco(f.energy_cents)}/mes</span>
+        </div>`).join('')
+    : '<div class="empty">Voce ainda nao tem moveis.</div>';
+
+  document.getElementById('catalogo').innerHTML = d.catalogo.map(cardMovel).join('');
+}
+carregar();
+</script>
+</body>
+</html>

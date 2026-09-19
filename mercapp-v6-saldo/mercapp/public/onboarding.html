@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Comecar · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Como voce quer comecar?</h1>
+        <div class="sub">Sem dinheiro de graca aqui -- junte capital trabalhando ou pague a taxa pra abrir sua empresa direto.</div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="tabs" style="display:flex;gap:6px;margin-bottom:20px;">
+      <button class="btn" id="tab-emprego">Procurar emprego</button>
+      <button class="btn secondary" id="tab-empresa">Criar empresa</button>
+    </div>
+
+    <div id="painel-emprego">
+      <div class="section-title">Vagas abertas</div>
+      <div id="vagas"></div>
+      <div class="section-title">Minhas candidaturas</div>
+      <div id="minhas-candidaturas"></div>
+    </div>
+
+    <div id="painel-empresa" style="display:none;">
+      <form id="form-empresa" class="form-grid">
+        <div class="field full"><label>Nome da empresa</label><input name="name" required></div>
+        <div class="field">
+          <label>Categoria</label>
+          <select name="category_id" id="category_id"></select>
+        </div>
+        <div class="field">
+          <label>Capital inicial (R$)</label>
+          <input name="capital" type="number" min="0" step="0.01" value="0">
+          <div class="hint" id="hint-custo"></div>
+        </div>
+        <div class="field full"><label>Descricao</label><textarea name="description"></textarea></div>
+        <div class="field full">
+          <label>Logo</label>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <div id="preview-logo" class="cover" style="width:70px;height:70px;border-radius:8px;border:1px solid var(--line);background-size:cover;font-size:10px;">sem logo</div>
+            <input id="file-logo" type="file" accept="image/*">
+          </div>
+          <input name="logo_url" type="hidden">
+        </div>
+        <div class="form-actions"><button class="btn" type="submit">Abrir empresa</button></div>
+      </form>
+    </div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+let userId, taxaCriacao = 30000;
+
+document.getElementById('tab-emprego').addEventListener('click', () => {
+  document.getElementById('painel-emprego').style.display = '';
+  document.getElementById('painel-empresa').style.display = 'none';
+});
+document.getElementById('tab-empresa').addEventListener('click', () => {
+  document.getElementById('painel-emprego').style.display = 'none';
+  document.getElementById('painel-empresa').style.display = '';
+});
+
+async function carregarSaldo() {
+  const resp = await fetch(`${API}/auth/me/${userId}`);
+  const u = await resp.json();
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><div class="label">Seu saldo pessoal</div><div class="value num">${formatarPreco(u.balance_cents)}</div></div>
+    <div class="kpi"><div class="label">Taxa pra abrir empresa</div><div class="value num">${formatarPreco(taxaCriacao)}</div></div>`;
+  return u;
+}
+
+async function carregarVagas() {
+  const resp = await fetch(`${API}/onboarding/vagas`);
+  const vagas = await resp.json();
+  document.getElementById('vagas').innerHTML = vagas.length
+    ? vagas.map((v) => `
+        <div class="list-row">
+          <div><strong>${v.company_name}</strong> ${v.is_bot ? '<span class="badge">empresa da simulacao</span>' : ''}<br>
+            <span class="stat">${v.title || 'vaga generica'} · reputacao ${Number(v.reputation).toFixed(1)}</span></div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input id="wage-${v.company_id}" type="number" placeholder="salario pedido" value="1500" style="width:110px;border:1px solid var(--line);border-radius:4px;padding:6px;font-size:13px;">
+            <button class="btn secondary" style="padding:6px 12px;font-size:12px;" onclick="candidatar('${v.company_id}', ${v.role_id ? `'${v.role_id}'` : 'null'})">Candidatar</button>
+          </div>
+        </div>`).join('')
+    : '<div class="empty">Nenhuma vaga aberta agora.</div>';
+}
+
+async function candidatar(companyId, roleId) {
+  const wage = document.getElementById(`wage-${companyId}`).value;
+  const resp = await fetch(`${API}/onboarding/candidatar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, company_id: companyId, role_id: roleId, wage }),
+  });
+  const d = await resp.json();
+  if (resp.ok) { toast('Candidatura enviada!'); carregarCandidaturas(); }
+  else toast(d.erro || 'Erro ao se candidatar.');
+}
+
+async function negociar(id) {
+  const valor = prompt('Novo valor de salario pedido (R$):');
+  if (!valor) return;
+  const resp = await fetch(`${API}/onboarding/negociar/${id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wage: valor }),
+  });
+  if (resp.ok) { toast('Proposta atualizada.'); carregarCandidaturas(); } else toast('Erro ao negociar.');
+}
+
+async function carregarCandidaturas() {
+  const resp = await fetch(`${API}/onboarding/minhas-candidaturas/${userId}`);
+  const lista = await resp.json();
+  document.getElementById('minhas-candidaturas').innerHTML = lista.length
+    ? lista.map((c) => `
+        <div class="list-row">
+          <div><strong>${c.company_name}</strong><br><span class="stat">pedindo ${formatarPreco(c.wage_cents)}/mes</span></div>
+          <span class="status-pill ${c.status === 'contratado' ? 'active' : c.status === 'recusado' ? 'draft' : 'paused'}">${c.status}</span>
+          ${c.status === 'pendente' ? `<button class="btn secondary" style="padding:6px 10px;font-size:12px;" onclick="negociar('${c.id}')">Renegociar</button>` : ''}
+        </div>`).join('')
+    : '<div class="empty">Nenhuma candidatura ainda.</div>';
+
+  if (lista.some((c) => c.status === 'contratado')) {
+    toast('Voce foi contratado! O salario cai na sua conta pessoal no fim do mes.');
+  }
+}
+
+async function carregarCategorias() {
+  const resp = await fetch(`${API}/categories`);
+  const categorias = await resp.json();
+  const sel = document.getElementById('category_id');
+  categorias.forEach((c) => {
+    const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; sel.appendChild(o);
+  });
+}
+
+ligarSeletorDeImagem(document.getElementById('file-logo'), document.querySelector('input[name=logo_url]'), document.getElementById('preview-logo'));
+
+document.querySelector('input[name=capital]').addEventListener('input', (e) => {
+  const capital = Math.round(Number(e.target.value || 0) * 100);
+  document.getElementById('hint-custo').textContent =
+    `Total necessario: ${formatarPreco(taxaCriacao + capital)} (taxa + capital escolhido)`;
+});
+
+document.getElementById('form-empresa').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = Object.fromEntries(new FormData(e.target).entries());
+  fd.user_id = userId;
+  const resp = await fetch(`${API}/onboarding/criar-empresa`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fd),
+  });
+  const d = await resp.json();
+  if (resp.ok) {
+    localStorage.setItem('mercapp_company_id', d.empresa.id);
+    toast('Empresa criada!');
+    location.href = 'dashboard.html';
+  } else toast(d.erro || 'Erro ao criar empresa.');
+});
+
+(async () => {
+  userId = getUserIdAtual();
+  const cfg = await (await fetch(`${API}/onboarding/config`)).json();
+  taxaCriacao = cfg.taxa_criacao_cents;
+  document.getElementById('hint-custo').textContent = `Total necessario: ${formatarPreco(taxaCriacao)} (so a taxa, sem capital extra)`;
+  await carregarSaldo();
+  await carregarVagas();
+  await carregarCandidaturas();
+  await carregarCategorias();
+})();
+</script>
+</body>
+</html>

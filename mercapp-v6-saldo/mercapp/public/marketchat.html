@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>MarketChat · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main" style="max-width:760px;">
+    <div class="page-head">
+      <div>
+        <h1>MarketChat</h1>
+        <div class="sub">A rede social do mercado. Divulgue produtos e acompanhe seus afiliados.</div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:24px;">
+      <textarea id="conteudo" placeholder="O que voce quer divulgar hoje?" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:12px;font-family:var(--font-body);font-size:14px;min-height:80px;resize:vertical;"></textarea>
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+        <select id="produto" style="flex:1;min-width:180px;border:1px solid var(--line);border-radius:4px;padding:9px;font-size:14px;">
+          <option value="">Sem produto (post normal)</option>
+        </select>
+        <input id="file-post" type="file" accept="image/*" style="font-size:13px;">
+        <input id="image_url" type="hidden">
+        <button class="btn" id="btn-publicar">Publicar</button>
+      </div>
+    </div>
+
+    <div id="feed"></div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+function tempoRelativo(data) {
+  const min = Math.floor((Date.now() - new Date(data).getTime()) / 60000);
+  if (min < 1) return 'agora';
+  if (min < 60) return `${min}min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+function cardPost(p) {
+  const autor = p.bot_name || p.company_name || 'Anonimo';
+  const selo = p.kind === 'afiliado' ? '<span class="badge" style="background:#e6f3c9;color:var(--signal-dim);">afiliado</span>'
+             : p.kind === 'divulgacao' ? '<span class="badge">divulgacao</span>' : '';
+  const img = p.image_url ? `<div class="cover" style="background-image:url('${p.image_url}');height:220px;border-radius:6px;margin:10px 0;"></div>` : '';
+  const prod = p.product_name
+    ? `<div class="list-row" style="border-top:1px solid var(--paper-dim);margin-top:10px;">
+         <strong>${p.product_name}</strong><span class="num">${formatarPreco(p.price_cents)}</span>
+       </div>` : '';
+  return `
+    <div class="card" style="margin-bottom:14px;">
+      <div class="body">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <strong>${autor}</strong>
+          <span class="stat">${tempoRelativo(p.created_at)}</span>
+        </div>
+        ${selo}
+        <p style="margin:8px 0 0;">${p.content}</p>
+        ${img}
+        ${prod}
+        <div style="display:flex;gap:16px;margin-top:10px;font-size:13px;align-items:center;">
+          <a href="#" onclick="curtir('${p.id}');return false;">♥ <span class="num">${p.likes}</span></a>
+          <a href="#" onclick="verComentarios('${p.id}');return false;">${p.comentarios} comentarios</a>
+          <span class="stat">alcance ${p.reach}</span>
+        </div>
+        <div id="c-${p.id}"></div>
+      </div>
+    </div>`;
+}
+
+async function curtir(id) {
+  await fetch(`${API}/social/feed/${id}/like`, { method: 'POST' });
+  carregarFeed();
+}
+
+async function verComentarios(id) {
+  const box = document.getElementById(`c-${id}`);
+  if (box.dataset.aberto) { box.innerHTML = ''; delete box.dataset.aberto; return; }
+  const resp = await fetch(`${API}/social/feed/${id}/comentarios`);
+  const lista = await resp.json();
+  box.dataset.aberto = '1';
+  box.innerHTML = `
+    <div style="margin-top:10px;border-top:1px solid var(--paper-dim);padding-top:8px;">
+      ${lista.map((c) => `<div style="font-size:13px;margin-bottom:6px;"><strong>${c.autor || 'Alguem'}:</strong> ${c.content}</div>`).join('') || '<span class="stat">Nenhum comentario ainda.</span>'}
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <input id="in-${id}" placeholder="Comentar..." style="flex:1;border:1px solid var(--line);border-radius:4px;padding:7px;font-size:13px;">
+        <button class="btn secondary" style="padding:6px 12px;font-size:12px;" onclick="comentar('${id}')">Enviar</button>
+      </div>
+    </div>`;
+}
+
+async function comentar(id) {
+  const campo = document.getElementById(`in-${id}`);
+  const companyId = await garantirEmpresa();
+  const resp = await fetch(`${API}/social/feed/${id}/comentarios`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ company_id: companyId, content: campo.value }),
+  });
+  if (resp.ok) { campo.value = ''; verComentarios(id); verComentarios(id); }
+  else toast('Erro ao comentar.');
+}
+
+async function carregarProdutos() {
+  const companyId = await garantirEmpresa();
+  const resp = await fetch(`${API}/products/empresa/${companyId}`);
+  const produtos = await resp.json();
+  const sel = document.getElementById('produto');
+  produtos.forEach((p) => {
+    const o = document.createElement('option');
+    o.value = p.id; o.textContent = p.name;
+    sel.appendChild(o);
+  });
+}
+
+async function carregarFeed() {
+  const resp = await fetch(`${API}/social/feed`);
+  const posts = await resp.json();
+  document.getElementById('feed').innerHTML = posts.length
+    ? posts.map(cardPost).join('')
+    : '<div class="empty">Nenhuma publicacao ainda. Seja o primeiro!</div>';
+}
+
+document.getElementById('btn-publicar').addEventListener('click', async () => {
+  const companyId = await garantirEmpresa();
+  const conteudo = document.getElementById('conteudo').value.trim();
+  if (!conteudo) { toast('Escreva algo antes de publicar.'); return; }
+  const resp = await fetch(`${API}/social/feed`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      company_id: companyId,
+      content: conteudo,
+      product_id: document.getElementById('produto').value || null,
+      image_url: document.getElementById('image_url').value || null,
+    }),
+  });
+  if (resp.ok) {
+    document.getElementById('conteudo').value = '';
+    document.getElementById('image_url').value = '';
+    toast('Publicado!');
+    carregarFeed();
+  } else toast('Erro ao publicar.');
+});
+
+ligarSeletorDeImagem(document.getElementById('file-post'), document.getElementById('image_url'), null);
+carregarProdutos();
+carregarFeed();
+</script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Avaliacoes · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Avaliacoes</h1>
+        <div class="sub">O que os consumidores estao dizendo sobre seus produtos.</div>
+      </div>
+    </div>
+    <div id="lista"></div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+function estrelas(n) { return '★'.repeat(n) + '☆'.repeat(5 - n); }
+
+async function carregar() {
+  const companyId = await garantirEmpresa();
+  const resp = await fetch(`${API}/reviews/empresa/${companyId}`);
+  const avaliacoes = await resp.json();
+  const el = document.getElementById('lista');
+  el.innerHTML = avaliacoes.length
+    ? avaliacoes.map((a) => `
+        <div class="card" style="margin-bottom:10px;">
+          <div class="body">
+            <div class="meta" style="border:none;padding:0;">
+              <strong>${a.product_name}</strong>
+              <span class="stars num">${estrelas(a.rating)}</span>
+            </div>
+            <p style="margin:6px 0 0;">${a.comment || ''}</p>
+            <span class="stat">${new Date(a.created_at).toLocaleDateString('pt-BR')}</span>
+          </div>
+        </div>`).join('')
+    : '<div class="empty">Nenhuma avaliacao ainda.</div>';
+}
+carregar();
+</script>
+</body>
+</html>

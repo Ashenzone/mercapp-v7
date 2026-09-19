@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Criar Produto · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1 id="titulo-pagina">Criar Produto</h1>
+        <div class="sub">Preencha os dados para colocar seu produto no marketplace.</div>
+      </div>
+    </div>
+
+    <form id="form-produto" class="form-grid">
+      <div class="field full">
+        <label>Nome do produto</label>
+        <input name="name" required placeholder="Ex: Curso de Prompt Engineering do Zero">
+      </div>
+
+      <div class="field">
+        <label>Categoria</label>
+        <select name="category_id" id="category_id"></select>
+      </div>
+
+      <div class="field">
+        <label>Tipo de produto</label>
+        <select name="product_type">
+          <option value="ebook">E-book</option>
+          <option value="curso">Curso</option>
+          <option value="template">Template</option>
+          <option value="software">Software</option>
+          <option value="servico">Servico</option>
+          <option value="fisico">Produto fisico</option>
+          <option value="digital">Produto digital</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+
+      <div class="field full">
+        <label>Descricao</label>
+        <textarea name="description" placeholder="O que o cliente recebe, para quem e, qual problema resolve..."></textarea>
+      </div>
+
+      <div class="field">
+        <label>Preco de venda (R$)</label>
+        <input name="price" type="number" step="0.01" min="0" required placeholder="97.00">
+      </div>
+
+      <div class="field">
+        <label>Moeda / mercado</label>
+        <select name="currency_code" id="currency_code"></select>
+        <div class="hint">Vender fora do Brasil aumenta a procura, mas paga imposto de importacao.</div>
+      </div>
+
+      <div class="field">
+        <label>Custo de producao (R$)</label>
+        <input name="cost" type="number" step="0.01" min="0" placeholder="0.00">
+        <div class="hint">Usado para calcular sua margem/lucro nos relatorios.</div>
+      </div>
+
+      <div class="field">
+        <label>Nicho</label>
+        <input name="niche" placeholder="Ex: inteligencia artificial">
+      </div>
+
+      <div class="field">
+        <label>Publico-alvo</label>
+        <input name="target_audience" placeholder="Ex: iniciantes em programacao">
+      </div>
+
+      <div class="field full">
+        <label>Palavras-chave (separadas por virgula)</label>
+        <input name="keywords" placeholder="ia, produtividade, automacao">
+      </div>
+
+      <div class="field">
+        <label>Quantidade em estoque</label>
+        <input name="stock_quantity" type="number" min="0" placeholder="deixe vazio se ilimitado">
+      </div>
+
+      <div class="field">
+        <label>Imagem de capa</label>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <div id="preview-capa" class="cover" style="width:80px;height:60px;border-radius:6px;border:1px solid var(--line);background-size:cover;background-position:center;font-size:10px;">sem capa</div>
+          <input id="file-capa" type="file" accept="image/*">
+        </div>
+        <input name="cover_image_url" type="hidden">
+        <div class="hint">Do computador ou da galeria do celular.</div>
+      </div>
+
+      <div class="field">
+        <label>Status</label>
+        <select name="status">
+          <option value="active">Ativo (visivel no marketplace)</option>
+          <option value="draft">Rascunho</option>
+          <option value="paused">Pausado</option>
+        </select>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn" type="submit" id="btn-salvar">Publicar produto</button>
+        <a class="btn secondary" href="meus-produtos.html">Cancelar</a>
+      </div>
+    </form>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+const idEdicao = new URLSearchParams(location.search).get('id');
+const form = document.getElementById('form-produto');
+
+async function carregarMoedas() {
+  const resp = await fetch(`${API}/financas/moedas`);
+  const moedas = await resp.json();
+  const sel = document.getElementById('currency_code');
+  moedas.forEach((m) => {
+    const o = document.createElement('option');
+    o.value = m.code;
+    o.textContent = `${m.name} — imposto ${Number(m.import_tax_pct).toFixed(0)}%`;
+    sel.appendChild(o);
+  });
+}
+
+async function carregarCategorias() {
+  const resp = await fetch(`${API}/categories`);
+  const categorias = await resp.json();
+  const sel = document.getElementById('category_id');
+  categorias.forEach((c) => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    sel.appendChild(opt);
+  });
+}
+
+async function carregarParaEdicao() {
+  if (!idEdicao) return;
+  document.getElementById('titulo-pagina').textContent = 'Editar Produto';
+  document.getElementById('btn-salvar').textContent = 'Salvar alteracoes';
+  const resp = await fetch(`${API}/products/${idEdicao}`);
+  const p = await resp.json();
+  form.name.value = p.name;
+  form.category_id.value = p.category_id || '';
+  form.product_type.value = p.product_type;
+  form.description.value = p.description || '';
+  form.price.value = (p.price_cents / 100).toFixed(2);
+  form.cost.value = (p.cost_cents / 100).toFixed(2);
+  form.niche.value = p.niche || '';
+  form.target_audience.value = p.target_audience || '';
+  form.keywords.value = (p.keywords || []).join(', ');
+  form.stock_quantity.value = p.stock_quantity ?? '';
+  form.cover_image_url.value = p.cover_image_url || '';
+  if (p.cover_image_url) {
+    const pv = document.getElementById('preview-capa');
+    pv.style.backgroundImage = `url('${p.cover_image_url}')`;
+    pv.textContent = '';
+  }
+  form.status.value = p.status;
+  if (p.currency_code) form.currency_code.value = p.currency_code;
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const companyId = await garantirEmpresa();
+  const fd = new FormData(form);
+  const payload = Object.fromEntries(fd.entries());
+  payload.company_id = companyId;
+
+  const url = idEdicao ? `${API}/products/${idEdicao}` : `${API}/products`;
+  const method = idEdicao ? 'PUT' : 'POST';
+
+  const resp = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (resp.ok) {
+    toast(idEdicao ? 'Produto atualizado.' : 'Produto publicado.');
+    setTimeout(() => (location.href = 'meus-produtos.html'), 600);
+  } else {
+    const err = await resp.json();
+    toast(err.erro || 'Erro ao salvar produto.');
+  }
+});
+
+ligarSeletorDeImagem(
+  document.getElementById('file-capa'),
+  form.cover_image_url,
+  document.getElementById('preview-capa')
+);
+
+Promise.all([carregarCategorias(), carregarMoedas()]).then(carregarParaEdicao);
+</script>
+</body>
+</html>

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Cybersecurity · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+<style>
+.avatar { width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-family:var(--font-head);flex-shrink:0; }
+.terminal { background:#0d1117;color:#7ee787;font-family:var(--font-num);border-radius:8px;padding:16px;font-size:13px;line-height:1.7; }
+.terminal .linha-op { background:#161b22;border:1px solid #30363d;border-radius:4px;padding:8px 12px;margin-bottom:6px;cursor:pointer;color:#c9d1d9; }
+.terminal .linha-op:hover { border-color:#7ee787; }
+.terminal .escolhida { background:#0d2818;border-color:#7ee787;color:#7ee787; }
+.tabs { display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap; }
+.tabs button { padding:8px 14px;border-radius:100px;border:1px solid var(--line);background:#fff;font-size:13px;cursor:pointer; }
+.tabs button.active { background:var(--ink);color:#fff;border-color:var(--ink); }
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Cybersecurity</h1>
+        <div class="sub">Proteja seus produtos, contrate especialistas e teste a seguranca de outras empresas. Tudo ficticio, dentro da simulacao.</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="active" data-tab="seguranca">Meus produtos</button>
+      <button data-tab="contratar">Contratar especialistas</button>
+      <button data-tab="atacar">Atacar</button>
+      <button data-tab="minigame">Mini-game</button>
+    </div>
+
+    <div class="tab-content active" id="tab-seguranca">
+      <div id="lista-produtos"></div>
+    </div>
+
+    <div class="tab-content" id="tab-contratar">
+      <div class="section-title">Seus especialistas contratados</div>
+      <div id="contratados"></div>
+      <div class="section-title">Disponiveis no mercado</div>
+      <div class="grid" id="disponiveis"></div>
+    </div>
+
+    <div class="tab-content" id="tab-atacar">
+      <div class="toolbar">
+        <input id="busca-alvo" placeholder="Buscar produto de outra empresa pra testar...">
+      </div>
+      <div id="alvos"></div>
+      <div class="section-title">Seu historico de tentativas</div>
+      <div id="historico"></div>
+    </div>
+
+    <div class="tab-content" id="tab-minigame">
+      <div id="minigame-area">
+        <button class="btn" id="btn-novo-desafio">Comecar novo desafio</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+let companyId;
+const CORES = ['#b6e21f','#e0553b','#5b8def','#e0a13b','#a06fe0','#3bc9c0'];
+function corAvatar(seed) {
+  let h = 0; for (const c of seed) h = (h * 31 + c.charCodeAt(0)) % CORES.length;
+  return CORES[h];
+}
+function iniciais(nome) { return nome.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase(); }
+
+document.querySelectorAll('.tabs button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tabs button').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach((c) => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+  });
+});
+
+// ---------- MEUS PRODUTOS ----------
+async function upgrade(id) {
+  const resp = await fetch(`${API}/cyber/produtos/${id}/upgrade`, { method: 'POST' });
+  const d = await resp.json();
+  if (resp.ok) { toast(`Seguranca agora e nivel ${d.novo_nivel}.`); carregarProdutos(); atualizarSaldoSidebar(); }
+  else toast(d.erro || 'Erro ao melhorar.');
+}
+
+async function carregarProdutos() {
+  const resp = await fetch(`${API}/cyber/produtos/${companyId}`);
+  const produtos = await resp.json();
+  document.getElementById('lista-produtos').innerHTML = produtos.length
+    ? produtos.map((p) => `
+        <div class="list-row">
+          <div><strong>${p.name}</strong><br><span class="stat">Seguranca nivel ${p.security_level}/5</span></div>
+          ${p.custo_proximo_nivel
+            ? `<button class="btn secondary" style="padding:6px 12px;font-size:12px;" onclick="upgrade('${p.id}')">Melhorar (${formatarPreco(p.custo_proximo_nivel)})</button>`
+            : '<span class="badge">nivel maximo</span>'}
+        </div>`).join('')
+    : '<div class="empty">Voce ainda nao tem produtos.</div>';
+}
+
+// ---------- CONTRATAR ----------
+function cardBot(b, contratavel) {
+  return `
+    <div class="card">
+      <div class="body">
+        <div style="display:flex;gap:10px;align-items:center;">
+          <div class="avatar" style="background:${corAvatar(b.avatar_seed)}">${iniciais(b.name)}</div>
+          <div>
+            <strong>${b.name}</strong><br>
+            <span class="stat">${b.country} · ${b.specialty}</span>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--text-dim);margin-top:8px;">
+          Experiencia ${b.experience}/100 · ★ ${Number(b.reputation).toFixed(1)}
+        </div>
+        <div class="meta">
+          <span class="price num">${formatarPreco(b.salary_cents)}/mes</span>
+          ${contratavel
+            ? `<button class="btn" style="padding:6px 12px;font-size:12px;" onclick="contratar(${b.id})">Contratar</button>`
+            : `<button class="btn danger" style="padding:6px 12px;font-size:12px;" onclick="dispensar('${b.hire_id}')">Dispensar</button>`}
+        </div>
+      </div>
+    </div>`;
+}
+
+async function contratar(id) {
+  const resp = await fetch(`${API}/cyber/bots/${id}/contratar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ company_id: companyId }),
+  });
+  const d = await resp.json();
+  if (resp.ok) { toast('Especialista contratado!'); carregarBots(); } else toast(d.erro || 'Erro ao contratar.');
+}
+async function dispensar(hireId) {
+  await fetch(`${API}/cyber/bots/dispensar/${hireId}`, { method: 'DELETE' });
+  toast('Dispensado.'); carregarBots();
+}
+
+async function carregarBots() {
+  const [todosResp, meusResp] = await Promise.all([
+    fetch(`${API}/cyber/bots`), fetch(`${API}/cyber/bots/contratados/${companyId}`),
+  ]);
+  const todos = await todosResp.json();
+  const meus = await meusResp.json();
+  document.getElementById('contratados').innerHTML = meus.length
+    ? meus.map((b) => cardBot(b, false)).join('')
+    : '<div class="empty">Nenhum especialista contratado ainda.</div>';
+  const livres = todos.filter((b) => !b.contratado_por);
+  document.getElementById('disponiveis').innerHTML = livres.map((b) => cardBot(b, true)).join('');
+}
+
+// ---------- ATACAR ----------
+async function atacar(produtoId) {
+  const resp = await fetch(`${API}/cyber/atacar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ attacker_company_id: companyId, target_product_id: produtoId }),
+  });
+  const d = await resp.json();
+  if (!resp.ok) { toast(d.erro || 'Erro ao atacar.'); return; }
+  if (d.sucesso) {
+    toast(`Sucesso! +${formatarPreco(d.recompensa_cents)}`);
+    atualizarSaldoSidebar();
+  } else {
+    toast(d.relatorio.mensagem);
+  }
+  carregarHistorico();
+}
+
+async function buscarAlvos() {
+  const termo = document.getElementById('busca-alvo').value;
+  const resp = await fetch(`${API}/products?busca=${encodeURIComponent(termo)}&limit=12`);
+  const { produtos } = await resp.json();
+  const outros = produtos.filter((p) => p.company_id !== companyId);
+  document.getElementById('alvos').innerHTML = outros.length
+    ? outros.map((p) => `
+        <div class="list-row">
+          <div><strong>${p.name}</strong><br><span class="stat">${p.company_name} · seguranca desconhecida</span></div>
+          <button class="btn secondary" style="padding:6px 12px;font-size:12px;" onclick="atacar('${p.id}')">Testar seguranca</button>
+        </div>`).join('')
+    : '<div class="empty">Nenhum produto encontrado.</div>';
+}
+
+async function carregarHistorico() {
+  const resp = await fetch(`${API}/cyber/ataques/${companyId}`);
+  const lista = await resp.json();
+  document.getElementById('historico').innerHTML = lista.length
+    ? lista.map((h) => `
+        <div class="list-row">
+          <div>${h.product_name}</div>
+          <span class="stat">${h.success ? `sucesso +${formatarPreco(h.reward_cents)}` : 'bloqueado'} · ${new Date(h.created_at).toLocaleString('pt-BR')}</span>
+        </div>`).join('')
+    : '<div class="empty">Nenhuma tentativa ainda.</div>';
+}
+document.getElementById('busca-alvo').addEventListener('input', () => { clearTimeout(window._t); window._t = setTimeout(buscarAlvos, 300); });
+
+// ---------- MINI-GAME ----------
+let desafioAtual = null;
+let ordemEscolhida = [];
+
+async function novoDesafio() {
+  const resp = await fetch(`${API}/cyber/minigame/novo`);
+  desafioAtual = await resp.json();
+  ordemEscolhida = [];
+  renderDesafio();
+}
+
+function renderDesafio() {
+  const area = document.getElementById('minigame-area');
+  area.innerHTML = `
+    <div class="terminal">
+      <div style="margin-bottom:10px;color:#c9d1d9;">$ ${desafioAtual.titulo} — dificuldade ${desafioAtual.dificuldade} — recompensa ${formatarPreco(desafioAtual.recompensa_cents)}</div>
+      <div id="linhas-disponiveis">
+        ${desafioAtual.linhas.map((l) => `<div class="linha-op" data-pos="${l.pos}" onclick="escolherLinha(${l.pos})">${l.texto}</div>`).join('')}
+      </div>
+      <div style="margin-top:14px;color:#c9d1d9;">Sua ordem:</div>
+      <div id="ordem-montada" style="margin-top:6px;"></div>
+      <div style="margin-top:14px;display:flex;gap:8px;">
+        <button class="btn" onclick="enviarResposta()">Executar</button>
+        <button class="btn secondary" onclick="novoDesafio()">Trocar desafio</button>
+      </div>
+    </div>`;
+}
+
+function escolherLinha(pos) {
+  if (ordemEscolhida.includes(pos)) return;
+  ordemEscolhida.push(pos);
+  document.querySelector(`.linha-op[data-pos="${pos}"]`).classList.add('escolhida');
+  document.getElementById('ordem-montada').innerHTML = ordemEscolhida
+    .map((p, i) => `<div class="linha-op escolhida">${i + 1}. ${desafioAtual.linhas.find(l => l.pos === p).texto}</div>`)
+    .join('');
+}
+
+async function enviarResposta() {
+  if (ordemEscolhida.length !== desafioAtual.linhas.length) { toast('Escolha todas as linhas na ordem certa.'); return; }
+  const resp = await fetch(`${API}/cyber/minigame/resolver`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ company_id: companyId, puzzle_id: desafioAtual.id, ordem: ordemEscolhida }),
+  });
+  const d = await resp.json();
+  if (!resp.ok) { toast(d.erro || 'Erro.'); return; }
+  if (d.acertou) { toast(`Correto! +${formatarPreco(d.recompensa_cents)}`); atualizarSaldoSidebar(); }
+  else toast('Ordem incorreta. Tente outro desafio.');
+  novoDesafio();
+}
+
+document.getElementById('btn-novo-desafio').addEventListener('click', novoDesafio);
+
+(async () => {
+  companyId = await garantirEmpresa();
+  carregarProdutos();
+  carregarBots();
+  buscarAlvos();
+  carregarHistorico();
+})();
+</script>
+</body>
+</html>

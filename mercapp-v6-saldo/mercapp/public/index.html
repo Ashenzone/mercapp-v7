@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Marketplace · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Marketplace</h1>
+        <div class="sub">Produtos de todos os empreendedores da simulacao.</div>
+      </div>
+      <a class="btn" href="criar-produto.html">+ Novo produto</a>
+    </div>
+
+    <div class="toolbar">
+      <input id="busca" type="text" placeholder="Buscar produto ou nicho...">
+      <select id="categoria"><option value="">Todas as categorias</option></select>
+      <select id="ordenar">
+        <option value="relevancia">Relevancia</option>
+        <option value="recentes">Mais recentes</option>
+        <option value="vendas">Mais vendidos</option>
+        <option value="preco_asc">Menor preco</option>
+        <option value="preco_desc">Maior preco</option>
+      </select>
+    </div>
+
+    <div id="grid" class="grid"></div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+async function carregarCategorias() {
+  const resp = await fetch(`${API}/categories`);
+  const categorias = await resp.json();
+  const sel = document.getElementById('categoria');
+  categorias.forEach((c) => {
+    const opt = document.createElement('option');
+    opt.value = c.slug;
+    opt.textContent = c.name;
+    sel.appendChild(opt);
+  });
+}
+
+function cardProduto(p) {
+  const capa = p.cover_image_url
+    ? `<div class="cover" style="background-image:url('${p.cover_image_url}')"></div>`
+    : `<div class="cover">sem capa</div>`;
+  return `
+    <a class="card" href="produto.html?id=${p.id}">
+      ${capa}
+      <div class="body">
+        <div class="cat">${p.category_name || 'sem categoria'}</div>
+        <h3>${p.name}</h3>
+        <div class="meta">
+          <span class="price num">${formatarPreco(p.price_cents)}</span>
+          <span class="stat">${p.sales_count} vendas · ★ ${Number(p.rating_avg).toFixed(1)}</span>
+        </div>
+      </div>
+    </a>`;
+}
+
+async function carregarProdutos() {
+  const grid = document.getElementById('grid');
+  const busca = document.getElementById('busca').value;
+  const categoria = document.getElementById('categoria').value;
+  const ordenar = document.getElementById('ordenar').value;
+  const params = new URLSearchParams({ ordenar });
+  if (busca) params.set('busca', busca);
+  if (categoria) params.set('categoria', categoria);
+
+  const resp = await fetch(`${API}/products?${params}`);
+  const { produtos } = await resp.json();
+
+  if (produtos.length === 0) {
+    grid.innerHTML = `<div class="empty">Nenhum produto encontrado. Que tal <a href="criar-produto.html">criar o primeiro</a>?</div>`;
+    return;
+  }
+  grid.innerHTML = produtos.map(cardProduto).join('');
+}
+
+let debounce;
+document.getElementById('busca').addEventListener('input', () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(carregarProdutos, 300);
+});
+document.getElementById('categoria').addEventListener('change', carregarProdutos);
+document.getElementById('ordenar').addEventListener('change', carregarProdutos);
+
+carregarCategorias();
+carregarProdutos();
+</script>
+</body>
+</html>

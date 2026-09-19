@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Analytics · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Analytics</h1>
+        <div class="sub">Desempenho da sua empresa ao longo do tempo.</div>
+      </div>
+      <select id="periodo">
+        <option value="24h">Ultimas 24 horas</option>
+        <option value="7d">7 dias</option>
+        <option value="30d" selected>30 dias</option>
+        <option value="90d">90 dias</option>
+        <option value="tudo">Todo o periodo</option>
+      </select>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="detail" style="grid-template-columns: 1fr;">
+      <div class="panel">
+        <h3 style="margin-bottom:14px;">Vendas ao longo do tempo</h3>
+        <canvas id="grafico" height="80"></canvas>
+      </div>
+    </div>
+
+    <div class="section-title">Desempenho por produto</div>
+    <table>
+      <thead><tr><th>Produto</th><th>Views</th><th>Vendas</th><th>Avaliacao</th><th>Lucro estimado</th></tr></thead>
+      <tbody id="tabela-produtos"></tbody>
+    </table>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+let chart;
+
+function kpi(label, value, cls = '') {
+  return `<div class="kpi"><div class="label">${label}</div><div class="value ${cls} num">${value}</div></div>`;
+}
+
+async function carregar() {
+  const companyId = await garantirEmpresa();
+  const periodo = document.getElementById('periodo').value;
+  const resp = await fetch(`${API}/analytics/empresa/${companyId}?periodo=${periodo}`);
+  const a = await resp.json();
+
+  document.getElementById('kpis').innerHTML =
+    kpi('Vendas', a.resumo.total_vendas) +
+    kpi('Receita', a.resumo.receita_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })) +
+    kpi('CPC', a.trafego_pago.cpc.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })) +
+    kpi('CTR', (a.trafego_pago.ctr * 100).toFixed(1) + '%') +
+    kpi('CPA', a.trafego_pago.cpa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })) +
+    kpi('ROI', (a.trafego_pago.roi * 100).toFixed(0) + '%', a.trafego_pago.roi >= 0 ? 'up' : 'down');
+
+  const labels = a.serie_vendas.map((s) => new Date(s.dia).toLocaleDateString('pt-BR'));
+  const dados = a.serie_vendas.map((s) => s.receita);
+
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('grafico'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Receita (R$)',
+        data: dados,
+        borderColor: '#8fb018',
+        backgroundColor: 'rgba(182,226,31,0.15)',
+        tension: 0.3,
+        fill: true,
+      }],
+    },
+    options: { responsive: true, plugins: { legend: { display: false } } },
+  });
+
+  document.getElementById('tabela-produtos').innerHTML = a.produtos.map((p) => `
+    <tr>
+      <td>${p.name}</td>
+      <td class="num-col">${p.views_count}</td>
+      <td class="num-col">${p.sales_count}</td>
+      <td class="num-col">${Number(p.rating_avg).toFixed(1)}</td>
+      <td class="num-col">${p.lucro_estimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+    </tr>`).join('') || '<tr><td colspan="5">Nenhum produto ainda.</td></tr>';
+}
+
+document.getElementById('periodo').addEventListener('change', carregar);
+carregar();
+</script>
+</body>
+</html>

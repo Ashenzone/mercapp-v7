@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Dashboard</h1>
+        <div class="sub" id="nome-empresa">Visao geral da sua empresa.</div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="section-title">Tendencias em alta agora</div>
+    <div class="grid" id="tendencias-top"></div>
+
+    <div class="section-title">Ultimos eventos de mercado</div>
+    <div id="eventos"></div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+function kpi(label, value, cls = '') {
+  return `<div class="kpi"><div class="label">${label}</div><div class="value ${cls} num">${value}</div></div>`;
+}
+
+async function carregarEmpresa() {
+  const id = await garantirEmpresa();
+  const resp = await fetch(`${API}/companies/${id}`);
+  const empresa = await resp.json();
+  document.getElementById('nome-empresa').textContent = `${empresa.name} · reputacao ${Number(empresa.reputation).toFixed(1)}`;
+  return { id, empresa };
+}
+
+async function carregarAnalytics(companyId) {
+  const resp = await fetch(`${API}/analytics/empresa/${companyId}?periodo=30d`);
+  const a = await resp.json();
+  document.getElementById('kpis').innerHTML =
+    kpi('Saldo', formatarPreco((await (await fetch(`${API}/companies/${companyId}`)).json()).balance_cents)) +
+    kpi('Vendas (30d)', a.resumo.total_vendas) +
+    kpi('Receita (30d)', a.resumo.receita_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })) +
+    kpi('ROI trafego pago', (a.trafego_pago.roi * 100).toFixed(0) + '%', a.trafego_pago.roi >= 0 ? 'up' : 'down');
+}
+
+function cardTendencia(t) {
+  return `
+    <div class="card">
+      <div class="body">
+        <div class="cat">${t.category_name || 'geral'}</div>
+        <h3>${t.name}</h3>
+        <span class="momentum ${t.momentum}">${t.momentum}</span>
+        <div class="bar"><div class="bar-fill" style="width:${t.popularity}%"></div></div>
+        <div class="stat">popularidade ${Number(t.popularity).toFixed(0)} · crescimento ${Number(t.growth) >= 0 ? '+' : ''}${Number(t.growth).toFixed(1)}%</div>
+      </div>
+    </div>`;
+}
+
+async function carregarTendencias() {
+  const resp = await fetch(`${API}/trends`);
+  const tendencias = await resp.json();
+  document.getElementById('tendencias-top').innerHTML = tendencias.slice(0, 6).map(cardTendencia).join('');
+}
+
+async function carregarEventos() {
+  const resp = await fetch(`${API}/trends/events`);
+  const eventos = await resp.json();
+  const el = document.getElementById('eventos');
+  if (eventos.length === 0) {
+    el.innerHTML = '<div class="empty">Nenhum evento de mercado ainda. Eles surgem aos poucos conforme o ciclo roda.</div>';
+    return;
+  }
+  el.innerHTML = eventos.slice(0, 8).map((e) => `
+    <div class="list-row">
+      <div><strong>${e.title}</strong><br><span style="color:var(--text-dim);font-size:13px;">${e.description || ''}</span></div>
+      <span class="stat">${new Date(e.created_at).toLocaleString('pt-BR')}</span>
+    </div>`).join('');
+}
+
+async function init() {
+  const { id } = await carregarEmpresa();
+  await Promise.all([carregarAnalytics(id), carregarTendencias(), carregarEventos()]);
+}
+init();
+</script>
+</body>
+</html>

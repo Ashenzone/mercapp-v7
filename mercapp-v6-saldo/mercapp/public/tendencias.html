@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Tendencias · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Tendencias do Mercado</h1>
+        <div class="sub">Assuntos em alta influenciam quais produtos os bots descobrem primeiro.</div>
+      </div>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <div class="section-title">Eventos recentes</div>
+    <div id="eventos"></div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+function cardTendencia(t) {
+  return `
+    <div class="card">
+      <div class="body">
+        <div class="cat">${t.category_name || 'geral'} ${t.source === 'real' ? '· fonte real' : ''}</div>
+        <h3>${t.name}</h3>
+        <span class="momentum ${t.momentum}">${t.momentum}</span>
+        <div class="bar"><div class="bar-fill" style="width:${t.popularity}%"></div></div>
+        <div class="meta">
+          <span class="stat">popularidade ${Number(t.popularity).toFixed(0)}/100</span>
+          <span class="stat num">${Number(t.growth) >= 0 ? '+' : ''}${Number(t.growth).toFixed(1)}%</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function carregar() {
+  const [tResp, eResp] = await Promise.all([fetch(`${API}/trends`), fetch(`${API}/trends/events`)]);
+  const tendencias = await tResp.json();
+  const eventos = await eResp.json();
+
+  document.getElementById('grid').innerHTML = tendencias.map(cardTendencia).join('');
+
+  const elEventos = document.getElementById('eventos');
+  elEventos.innerHTML = eventos.length
+    ? eventos.map((e) => `
+        <div class="list-row">
+          <div><strong>${e.title}</strong><br><span style="color:var(--text-dim);font-size:13px;">${e.description || ''}</span></div>
+          <span class="stat">${new Date(e.created_at).toLocaleString('pt-BR')}</span>
+        </div>`).join('')
+    : '<div class="empty">Nenhum evento ainda.</div>';
+}
+
+carregar();
+</script>
+</body>
+</html>
