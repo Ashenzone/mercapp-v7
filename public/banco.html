@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Banco · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Banco</h1>
+        <div class="sub">Quanto voce ja vendeu em cada moeda. O saldo gasto e sempre o equivalente em reais.</div>
+      </div>
+    </div>
+    <div class="grid" id="moedas"></div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+function cardMoeda(m) {
+  return `
+    <div class="card">
+      <div class="body">
+        <div class="cat">${m.currency_code}</div>
+        <h3>${m.name}</h3>
+        <div class="price num" style="margin-top:8px;">${m.symbol} ${m.equivalente_moeda_original.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</div>
+        <div class="stat" style="margin-top:6px;">equivalente a ${formatarPreco(m.total_brl_cents)} · ${m.vendas} vendas</div>
+      </div>
+    </div>`;
+}
+
+(async () => {
+  const companyId = await garantirEmpresa();
+  const resp = await fetch(`${API}/financas/banco/${companyId}`);
+  const moedas = await resp.json();
+  document.getElementById('moedas').innerHTML = moedas.length
+    ? moedas.map(cardMoeda).join('')
+    : '<div class="empty">Ainda sem vendas registradas em nenhuma moeda.</div>';
+})();
+</script>
+</body>
+</html>

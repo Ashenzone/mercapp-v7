@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Notificacoes · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div><h1>Notificacoes</h1><div class="sub">O que aconteceu na sua empresa.</div></div>
+      <button class="btn secondary" id="btn-marcar-todas">Marcar todas como lidas</button>
+    </div>
+    <div id="lista"></div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+const ICONES = {
+  campanha_terminou: '📢', avaliacao_recebida: '⭐', afiliado_pediu: '🤝',
+  invasao_sofrida: '⚠️', invasao_bloqueada: '🛡️',
+};
+
+async function carregar() {
+  const companyId = await garantirEmpresa();
+  const resp = await fetch(`${API}/notifications/empresa/${companyId}`);
+  const d = await resp.json();
+  document.getElementById('lista').innerHTML = d.notificacoes.length
+    ? d.notificacoes.map((n) => `
+        <div class="list-row" style="${n.is_read ? 'opacity:0.6;' : ''}">
+          <div>${ICONES[n.type] || '🔔'} ${n.message}</div>
+          <span class="stat">${new Date(n.created_at).toLocaleString('pt-BR')}</span>
+        </div>`).join('')
+    : '<div class="empty">Nenhuma notificacao ainda.</div>';
+}
+
+document.getElementById('btn-marcar-todas').addEventListener('click', async () => {
+  const companyId = await garantirEmpresa();
+  await fetch(`${API}/notifications/marcar-todas`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ company_id: companyId }),
+  });
+  carregar();
+});
+carregar();
+</script>
+</body>
+</html>

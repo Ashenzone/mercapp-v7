@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Afiliados · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Afiliados</h1>
+        <div class="sub">Bots e jogadores que querem divulgar seus produtos por comissao. Voce propoe um valor, eles decidem: aceitam, negociam ou recusam -- mesmo em 0%.</div>
+      </div>
+    </div>
+
+    <div class="section-title">Pedidos pendentes</div>
+    <div id="pendentes"></div>
+
+    <div class="section-title">Afiliados ativos</div>
+    <div id="ativos"></div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+function cardPedido(a) {
+  const propostaBot = a.last_offer_pct
+    ? `<div class="badge" style="background:#fdeec2;color:#9c6f1e;">o afiliado contrapropos ${Number(a.last_offer_pct).toFixed(0)}%</div>`
+    : '';
+  return `
+    <div class="card" style="margin-bottom:10px;">
+      <div class="body">
+        <div class="meta" style="border:none;padding:0;">
+          <strong>${a.afiliado_nome || 'Afiliado'}</strong>
+          <span class="badge">${a.tipo}</span>
+        </div>
+        <div class="stat">quer divulgar: <strong>${a.product_name}</strong> · rodada ${a.negotiation_rounds}/4</div>
+        ${propostaBot}
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+          <input id="com-${a.id}" type="number" min="0" max="70" value="${a.last_offer_pct ? Math.round(a.last_offer_pct) : Number(a.commission_pct).toFixed(0)}"
+                 style="width:90px;border:1px solid var(--line);border-radius:4px;padding:6px;font-size:13px;">
+          <span style="font-size:13px;">%</span>
+          <button class="btn" style="padding:6px 12px;font-size:12px;" onclick="oferecer('${a.id}')">Propor</button>
+          <button class="btn danger" style="padding:6px 12px;font-size:12px;" onclick="recusar('${a.id}')">Desistir</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function cardAtivo(a) {
+  return `
+    <div class="list-row">
+      <div>
+        <strong>${a.afiliado_nome || 'Afiliado'}</strong> — ${a.product_name}<br>
+        <span class="stat">${Number(a.commission_pct).toFixed(0)}% de comissao · ${a.sales_count} vendas geradas</span>
+      </div>
+      <div style="text-align:right;">
+        <div class="num">${formatarPreco(a.earned_cents)}</div>
+        <a href="#" style="font-size:12px;color:var(--down);" onclick="responderStatus('${a.id}','encerrado');return false;">encerrar</a>
+      </div>
+    </div>`;
+}
+
+async function oferecer(id) {
+  const valor = document.getElementById(`com-${id}`).value;
+  const resp = await fetch(`${API}/social/afiliados/${id}/oferecer`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ commission_pct: Number(valor) }),
+  });
+  const d = await resp.json();
+  if (!resp.ok) { toast(d.erro || 'Erro ao negociar.'); return; }
+  if (d.decisao === 'aceito') toast('Afiliado aceitou!');
+  else if (d.decisao === 'negociando') toast(`O afiliado quer ${d.proposta_pct}%. Ajuste e proponha de novo.`);
+  else toast('O afiliado recusou a negociacao.');
+  carregar();
+}
+
+async function recusar(id) {
+  await fetch(`${API}/social/afiliados/${id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'recusado' }),
+  });
+  carregar();
+}
+async function responderStatus(id, status) {
+  await fetch(`${API}/social/afiliados/${id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+  });
+  toast('Atualizado.'); carregar();
+}
+
+async function carregar() {
+  const companyId = await garantirEmpresa();
+  const resp = await fetch(`${API}/social/afiliados/${companyId}`);
+  const lista = await resp.json();
+
+  const pend = lista.filter((a) => a.status === 'pendente');
+  const ativos = lista.filter((a) => a.status === 'ativo');
+
+  document.getElementById('pendentes').innerHTML = pend.length
+    ? pend.map(cardPedido).join('')
+    : '<div class="empty">Nenhum pedido agora. Produtos bem avaliados atraem mais afiliados.</div>';
+  document.getElementById('ativos').innerHTML = ativos.length
+    ? ativos.map(cardAtivo).join('')
+    : '<div class="empty">Voce ainda nao tem afiliados ativos.</div>';
+}
+carregar();
+</script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Empresa · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Minha Empresa</h1>
+        <div class="sub">Sua marca dentro do marketplace.</div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <form id="form-empresa" class="form-grid">
+      <div class="field full">
+        <label>Nome da empresa</label>
+        <input name="name" required>
+      </div>
+      <div class="field full">
+        <label>Descricao</label>
+        <textarea name="description"></textarea>
+      </div>
+      <div class="field full">
+        <label>Logo da empresa</label>
+        <div style="display:flex;gap:14px;align-items:center;">
+          <div id="preview-logo" class="cover" style="width:90px;height:90px;border-radius:8px;border:1px solid var(--line);background-size:cover;background-position:center;font-size:11px;">sem logo</div>
+          <input id="file-logo" type="file" accept="image/*">
+        </div>
+        <input name="logo_url" type="hidden">
+        <div class="hint">Escolha do seu computador ou da galeria do celular.</div>
+      </div>
+      <div class="form-actions">
+        <button class="btn" type="submit">Salvar</button>
+      </div>
+    </form>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+const form = document.getElementById('form-empresa');
+
+function kpi(label, value) {
+  return `<div class="kpi"><div class="label">${label}</div><div class="value num">${value}</div></div>`;
+}
+
+async function carregar() {
+  const id = await garantirEmpresa();
+  const resp = await fetch(`${API}/companies/${id}`);
+  const empresa = await resp.json();
+  form.name.value = empresa.name;
+  form.description.value = empresa.description || '';
+  form.logo_url.value = empresa.logo_url || '';
+  if (empresa.logo_url) {
+    const pv = document.getElementById('preview-logo');
+    pv.style.backgroundImage = `url('${empresa.logo_url}')`;
+    pv.textContent = '';
+  }
+  document.getElementById('kpis').innerHTML =
+    kpi('Saldo', formatarPreco(empresa.balance_cents)) +
+    kpi('Reputacao', Number(empresa.reputation).toFixed(1) + ' / 5');
+}
+
+ligarSeletorDeImagem(
+  document.getElementById('file-logo'),
+  form.logo_url,
+  document.getElementById('preview-logo')
+);
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = await garantirEmpresa();
+  const resp = await fetch(`${API}/companies/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: form.name.value,
+      description: form.description.value,
+      logo_url: form.logo_url.value || null,
+    }),
+  });
+  const dados = await resp.json();
+  if (resp.ok) {
+    toast('Empresa salva.');
+    atualizarSaldoSidebar();
+  } else {
+    toast(dados.erro || 'Erro ao salvar empresa.');
+  }
+});
+
+carregar();
+</script>
+</body>
+</html>

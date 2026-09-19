@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Nickname · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main" style="max-width:480px;">
+    <div class="page-head">
+      <div>
+        <h1>Seu Nickname</h1>
+        <div class="sub">Esse nome aparece pra todo mundo -- no marketplace, ranking, contratos e avaliacoes. Seu e-mail nunca e mostrado publicamente.</div>
+      </div>
+    </div>
+
+    <form id="form-nick" class="form-grid">
+      <div class="field full">
+        <label>Nickname</label>
+        <input name="nickname" required minlength="3" maxlength="20" pattern="[a-zA-Z0-9_]+" placeholder="Ex: Ashen">
+        <div class="hint">3-20 caracteres, so letras/numeros/underscore.</div>
+      </div>
+      <div class="form-actions"><button class="btn" type="submit">Salvar</button></div>
+    </form>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+const userId = getUserIdAtual();
+
+(async () => {
+  const resp = await fetch(`${API}/auth/me/${userId}`);
+  const u = await resp.json();
+  if (u.nickname) document.querySelector('input[name=nickname]').value = u.nickname;
+})();
+
+document.getElementById('form-nick').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nickname = e.target.nickname.value.trim();
+  const resp = await fetch(`${API}/auth/nickname`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, nickname }),
+  });
+  const d = await resp.json();
+  if (resp.ok) {
+    toast('Nickname salvo!');
+    location.href = getEmpresaAtual() ? 'dashboard.html' : 'onboarding.html';
+  } else toast(d.erro || 'Erro ao salvar.');
+});
+</script>
+</body>
+</html>

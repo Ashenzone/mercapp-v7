@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Wi-Fi · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Wi-Fi</h1>
+        <div class="sub">Sem um plano ativo voce nao consegue publicar produto, rodar campanha ou postar no MarketChat.</div>
+      </div>
+    </div>
+
+    <div id="status-atual"></div>
+
+    <div class="section-title">Planos disponiveis</div>
+    <div class="grid" id="planos"></div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+let companyId;
+
+async function comprar(id) {
+  const resp = await fetch(`${API}/wifi/empresa/${companyId}/comprar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan_id: id }),
+  });
+  const d = await resp.json();
+  if (resp.ok) { toast('Wi-Fi ativado!'); carregar(); atualizarSaldoSidebar(); }
+  else toast(d.erro || 'Erro ao comprar plano.');
+}
+
+function cardPlano(p) {
+  return `
+    <div class="card">
+      <div class="body">
+        <h3>${p.name}</h3>
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.8;margin-top:6px;">
+          Velocidade: ${p.speed_mbps} Mbps · Estabilidade: ${p.stability_pct}%<br>
+          ${p.operation_limit} operacoes · dura ${p.duration_days} dias de jogo
+        </div>
+        <div class="meta">
+          <span class="price num">${formatarPreco(p.price_cents)}</span>
+          <button class="btn" style="padding:6px 12px;font-size:12px;" onclick="comprar(${p.id})">Ativar</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function carregar() {
+  const [statusResp, planosResp] = await Promise.all([
+    fetch(`${API}/wifi/empresa/${companyId}`), fetch(`${API}/wifi/planos`),
+  ]);
+  const status = await statusResp.json();
+  const planos = await planosResp.json();
+
+  document.getElementById('status-atual').innerHTML = status
+    ? `<div class="panel" style="margin-bottom:24px;">
+         <strong>${status.plan_name}</strong>
+         <span class="status-pill ${status.ativo ? 'active' : 'draft'}">${status.ativo ? 'ativo' : 'expirado/esgotado'}</span>
+         <div class="stat" style="margin-top:6px;">${status.operations_left} operacoes restantes · expira em ${new Date(status.expires_at).toLocaleString('pt-BR')}</div>
+       </div>`
+    : `<div class="empty" style="margin-bottom:24px;">Voce ainda nao tem nenhum plano ativo.</div>`;
+
+  document.getElementById('planos').innerHTML = planos.map(cardPlano).join('');
+}
+
+(async () => { companyId = await garantirEmpresa(); carregar(); })();
+</script>
+</body>
+</html>

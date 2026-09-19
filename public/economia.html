@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Economia · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Economia</h1>
+        <div class="sub">Como o dinheiro circula na simulacao.</div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="panel">
+      <h3 style="margin-bottom:10px;">Mecanismos que mantem o mercado equilibrado</h3>
+      <ul style="margin:0; padding-left: 18px; color: var(--text-dim); font-size: 14px; line-height: 1.8;">
+        <li>8% de toda venda sai da economia como taxa de plataforma (evita inflacao descontrolada).</li>
+        <li>Orcamento de campanhas de trafego pago e debitado do saldo assim que a campanha e criada.</li>
+        <li>Tendencias sobem, atingem um pico e depois caem — nenhuma vantagem dura para sempre.</li>
+        <li>Bots tem orcamento proprio e nao compram produtos acima do que "podem pagar".</li>
+      </ul>
+    </div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+function kpi(label, value, cls = '') {
+  return `<div class="kpi"><div class="label">${label}</div><div class="value ${cls} num">${value}</div></div>`;
+}
+
+async function carregar() {
+  const id = await garantirEmpresa();
+  const [empresaResp, analyticsResp] = await Promise.all([
+    fetch(`${API}/companies/${id}`),
+    fetch(`${API}/analytics/empresa/${id}?periodo=tudo`),
+  ]);
+  const empresa = await empresaResp.json();
+  const a = await analyticsResp.json();
+  const lucroEstimado = a.produtos.reduce((soma, p) => soma + p.lucro_estimado, 0);
+
+  document.getElementById('kpis').innerHTML =
+    kpi('Saldo atual', formatarPreco(empresa.balance_cents)) +
+    kpi('Receita total (vendas)', a.resumo.receita_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })) +
+    kpi('Gasto em trafego pago', a.trafego_pago.gasto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })) +
+    kpi('Lucro estimado', lucroEstimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), lucroEstimado >= 0 ? 'up' : 'down');
+}
+carregar();
+</script>
+</body>
+</html>

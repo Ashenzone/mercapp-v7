@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Meus Produtos · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Meus Produtos</h1>
+        <div class="sub">Gerencie o catalogo da sua empresa.</div>
+      </div>
+      <a class="btn" href="criar-produto.html">+ Novo produto</a>
+    </div>
+
+    <div id="conteudo"></div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+async function excluir(id) {
+  if (!confirm('Excluir este produto? Essa acao nao pode ser desfeita.')) return;
+  const resp = await fetch(`${API}/products/${id}`, { method: 'DELETE' });
+  if (resp.ok) {
+    toast('Produto excluido.');
+    carregar();
+  } else {
+    toast('Erro ao excluir produto.');
+  }
+}
+
+function linha(p) {
+  return `
+    <tr>
+      <td>${p.name}</td>
+      <td>${p.category_name || '—'}</td>
+      <td class="num-col">${formatarPreco(p.price_cents)}</td>
+      <td class="num-col">${p.stock_quantity ?? '∞'}</td>
+      <td class="num-col">${p.sales_count}</td>
+      <td class="num-col">${p.views_count}</td>
+      <td><span class="status-pill ${p.status}">${p.status}</span></td>
+      <td>
+        <a class="btn secondary" style="padding:6px 10px;font-size:12px;" href="criar-produto.html?id=${p.id}">Editar</a>
+        <button class="btn danger" style="padding:6px 10px;font-size:12px;" onclick="excluir('${p.id}')">Excluir</button>
+      </td>
+    </tr>`;
+}
+
+async function carregar() {
+  const companyId = await garantirEmpresa();
+  const resp = await fetch(`${API}/products/empresa/${companyId}`);
+  const produtos = await resp.json();
+  const el = document.getElementById('conteudo');
+
+  if (produtos.length === 0) {
+    el.innerHTML = `<div class="empty">Voce ainda nao tem produtos. <a href="criar-produto.html">Criar o primeiro</a>.</div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Produto</th><th>Categoria</th><th>Preco</th><th>Estoque</th>
+          <th>Vendas</th><th>Views</th><th>Status</th><th></th>
+        </tr>
+      </thead>
+      <tbody>${produtos.map(linha).join('')}</tbody>
+    </table>`;
+}
+carregar();
+</script>
+</body>
+</html>

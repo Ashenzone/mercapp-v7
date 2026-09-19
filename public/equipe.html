@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Equipe · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1>Equipe</h1>
+        <div class="sub">Crie cargos, contrate e defina salarios. Funcionarios aumentam sua conversao, mas custam todo mes.</div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="section-title">Criar cargo</div>
+    <form id="form-cargo" class="form-grid" style="margin-bottom:24px;">
+      <div class="field"><label>Titulo</label><input name="title" required placeholder="Ex: Gestor de Trafego"></div>
+      <div class="field"><label>Salario mensal (R$)</label><input name="salary" type="number" step="0.01" min="0" value="1500" required></div>
+      <div class="field">
+        <label>Departamento</label>
+        <select name="department">
+          <option value="geral">Geral</option>
+          <option value="marketing">Marketing</option>
+          <option value="producao">Producao</option>
+          <option value="vendas">Vendas</option>
+          <option value="suporte">Suporte</option>
+        </select>
+      </div>
+      <div class="form-actions"><button class="btn" type="submit">Criar cargo</button></div>
+    </form>
+
+    <div class="section-title">Cargos da empresa</div>
+    <div id="cargos"></div>
+
+    <div class="section-title">Candidaturas</div>
+    <div id="candidatos"></div>
+
+    <div class="section-title">Funcionarios contratados</div>
+    <div id="contratados"></div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+let cargosCache = [];
+
+async function carregar() {
+  const companyId = await garantirEmpresa();
+  const [cResp, vResp] = await Promise.all([
+    fetch(`${API}/rh/cargos/${companyId}`),
+    fetch(`${API}/rh/vagas/${companyId}`),
+  ]);
+  cargosCache = await cResp.json();
+  const vagas = await vResp.json();
+
+  const contratados = vagas.filter((v) => v.status === 'contratado');
+  const pendentes = vagas.filter((v) => v.status === 'pendente');
+  const folha = contratados.reduce((s, v) => s + Number(v.wage_cents), 0);
+  const skill = contratados.reduce((s, v) => s + Number(v.skill), 0);
+
+  document.getElementById('kpis').innerHTML =
+    `<div class="kpi"><div class="label">Funcionarios</div><div class="value num">${contratados.length}</div></div>
+     <div class="kpi"><div class="label">Folha mensal</div><div class="value num">${formatarPreco(folha)}</div></div>
+     <div class="kpi"><div class="label">Bonus de conversao</div><div class="value num up">+${(skill / 10).toFixed(1)}%</div></div>`;
+
+  document.getElementById('cargos').innerHTML = cargosCache.length
+    ? cargosCache.map((c) => `
+        <div class="list-row">
+          <div><strong>${c.title}</strong><br><span class="stat">${c.department} · ${c.ocupados} ocupando</span></div>
+          <div style="text-align:right;">
+            <div class="num">${formatarPreco(c.salary_cents)}</div>
+            <a href="#" style="font-size:12px;color:var(--down);" onclick="excluirCargo('${c.id}');return false;">excluir</a>
+          </div>
+        </div>`).join('')
+    : '<div class="empty">Nenhum cargo criado ainda.</div>';
+
+  const opcoesCargo = cargosCache.map((c) => `<option value="${c.id}">${c.title}</option>`).join('');
+
+  document.getElementById('candidatos').innerHTML = pendentes.length
+    ? pendentes.map((v) => `
+        <div class="card" style="margin-bottom:10px;"><div class="body">
+          <div class="meta" style="border:none;padding:0;">
+            <strong>${v.candidato || 'Candidato'}</strong><span class="badge">${v.tipo}</span>
+          </div>
+          <div style="display:flex;gap:18px;margin:8px 0;font-size:13px;">
+            <span>Habilidade: <strong class="num">${v.skill}/100</strong></span>
+            <span>Pede: <strong class="num">${formatarPreco(v.wage_cents)}</strong>/mes</span>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select id="cargo-${v.id}" style="border:1px solid var(--line);border-radius:4px;padding:6px;font-size:13px;">
+              <option value="">Sem cargo</option>${opcoesCargo}
+            </select>
+            <button class="btn" style="padding:6px 12px;font-size:12px;" onclick="responder('${v.id}','contratado')">Contratar</button>
+            <button class="btn danger" style="padding:6px 12px;font-size:12px;" onclick="responder('${v.id}','recusado')">Recusar</button>
+          </div>
+        </div></div>`).join('')
+    : '<div class="empty">Nenhuma candidatura no momento.</div>';
+
+  document.getElementById('contratados').innerHTML = contratados.length
+    ? contratados.map((v) => `
+        <div class="list-row">
+          <div><strong>${v.candidato}</strong><br><span class="stat">${v.cargo || 'sem cargo'} · habilidade ${v.skill}</span></div>
+          <div style="text-align:right;">
+            <div class="num">${formatarPreco(v.wage_cents)}</div>
+            <a href="#" style="font-size:12px;color:var(--down);" onclick="responder('${v.id}','demitido');return false;">demitir</a>
+          </div>
+        </div>`).join('')
+    : '<div class="empty">Nenhum funcionario ainda.</div>';
+}
+
+async function responder(id, status) {
+  const sel = document.getElementById(`cargo-${id}`);
+  const resp = await fetch(`${API}/rh/vagas/${id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, role_id: sel && sel.value ? sel.value : null }),
+  });
+  if (resp.ok) { toast('Atualizado.'); carregar(); } else toast('Erro.');
+}
+
+async function excluirCargo(id) {
+  if (!confirm('Excluir esse cargo?')) return;
+  await fetch(`${API}/rh/cargos/${id}`, { method: 'DELETE' });
+  carregar();
+}
+
+document.getElementById('form-cargo').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const companyId = await garantirEmpresa();
+  const fd = Object.fromEntries(new FormData(e.target).entries());
+  fd.company_id = companyId;
+  const resp = await fetch(`${API}/rh/cargos`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fd),
+  });
+  if (resp.ok) { toast('Cargo criado.'); e.target.reset(); carregar(); } else toast('Erro ao criar cargo.');
+});
+
+carregar();
+</script>
+</body>
+</html>

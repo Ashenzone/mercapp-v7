@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Entrar · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;">
+  <div class="panel" style="max-width:420px;width:100%;">
+    <div class="brand" style="font-family:var(--font-head);font-weight:700;font-size:26px;color:var(--ink);">
+      Merc<span style="color:var(--signal-dim);">app</span>
+    </div>
+    <p style="color:var(--text-dim);font-size:14px;margin-top:4px;">
+      Entre com seu e-mail. Sua empresa e seus produtos ficam salvos nele.
+    </p>
+
+    <form id="form-login" style="margin-top:20px;">
+      <div class="field">
+        <label>Seu e-mail</label>
+        <input name="email" type="email" required placeholder="voce@email.com" autocomplete="email">
+      </div>
+      <button class="btn" type="submit" style="width:100%;justify-content:center;margin-top:14px;">Entrar</button>
+    </form>
+
+    <p style="color:var(--text-dim);font-size:12px;margin-top:16px;">
+      Primeiro acesso cria uma empresa nova automaticamente. Sem senha por enquanto.
+    </p>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+document.getElementById('form-login').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = e.target.email.value.trim();
+  const resp = await fetch(`${API}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, device_id: getDeviceId() }),
+  });
+  const dados = await resp.json();
+  if (!resp.ok) { toast(dados.erro || 'Erro ao entrar.'); return; }
+
+  localStorage.setItem('mercapp_email', dados.email);
+  localStorage.setItem('mercapp_user_id', dados.id);
+  if (dados.company_id) {
+    localStorage.setItem('mercapp_company_id', dados.company_id);
+    location.href = 'dashboard.html';
+  } else {
+    localStorage.removeItem('mercapp_company_id');
+    location.href = 'onboarding.html';
+  }
+});
+</script>
+</body>
+</html>

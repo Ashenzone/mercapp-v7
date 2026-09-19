@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Produto · Mercapp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar"></aside>
+
+  <main class="main">
+    <div id="conteudo">Carregando...</div>
+  </main>
+</div>
+
+<script src="js/sidebar.js"></script>
+<script src="js/app.js"></script>
+<script>
+const id = new URLSearchParams(location.search).get('id');
+
+function estrelas(media) {
+  const cheias = Math.round(media);
+  return '★'.repeat(cheias) + '☆'.repeat(5 - cheias);
+}
+
+async function carregar() {
+  const resp = await fetch(`${API}/products/${id}`);
+  if (!resp.ok) {
+    document.getElementById('conteudo').innerHTML = '<div class="empty">Produto nao encontrado.</div>';
+    return;
+  }
+  const p = await resp.json();
+  const capa = p.cover_image_url
+    ? `style="background-image:url('${p.cover_image_url}')"`
+    : '';
+
+  document.getElementById('conteudo').innerHTML = `
+    <div class="page-head">
+      <div>
+        <div class="badge">${p.category_name || 'sem categoria'}</div>
+        <div class="badge">${p.product_type}</div>
+      </div>
+    </div>
+    <div class="detail">
+      <div class="cover-lg" ${capa}></div>
+      <div class="panel">
+        <h1>${p.name}</h1>
+        <div class="stars">${estrelas(p.rating_avg)} <span class="num">${Number(p.rating_avg).toFixed(1)}</span> (${p.rating_count} avaliacoes)</div>
+        <div class="price-lg num">${formatarPreco(p.price_cents)}</div>
+        <p>${p.description || 'Sem descricao.'}</p>
+        <p style="color:var(--text-dim); font-size:13px;">
+          Vendido por <strong>${p.company_name}</strong> ·
+          ${p.views_count} visualizacoes · ${p.sales_count} vendas
+        </p>
+        <div id="acoes" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
+        <p style="color:var(--text-dim); font-size:12px; margin-top:10px;">
+          Bots tambem compram sozinhos conforme as tendencias. Quer mais vendas? Use
+          <a href="trafego-pago.html">trafego pago</a> ou aceite <a href="afiliados.html">afiliados</a>.
+        </p>
+      </div>
+    </div>
+  `;
+
+  const meuId = getEmpresaAtual();
+  const acoes = document.getElementById('acoes');
+  if (p.company_id === meuId) {
+    acoes.innerHTML = `<a class="btn secondary" href="criar-produto.html?id=${p.id}">Editar produto</a>`;
+  } else {
+    acoes.innerHTML = `
+      <button class="btn" onclick="comprar('${p.id}')">Comprar por ${formatarPreco(p.price_cents)}</button>
+      <button class="btn secondary" onclick="pedirAfiliacao('${p.id}')">Quero ser afiliado</button>`;
+  }
+}
+
+async function comprar(id) {
+  const companyId = await garantirEmpresa();
+  const resp = await fetch(`${API}/products/${id}/comprar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ company_id: companyId, user_id: getUserIdAtual() }),
+  });
+  const d = await resp.json();
+  if (resp.ok) { toast('Compra realizada!'); atualizarSaldoSidebar(); carregar(); }
+  else toast(d.erro || 'Erro ao comprar.');
+}
+
+async function pedirAfiliacao(id) {
+  const email = getEmailAtual();
+  const uResp = await fetch(`${API}/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const eu = await uResp.json();
+  const resp = await fetch(`${API}/social/afiliados/pedir`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: eu.id, product_id: id }),
+  });
+  const d = await resp.json();
+  if (resp.ok) toast('Pedido de afiliacao enviado ao dono!');
+  else toast(d.erro || 'Erro ao pedir afiliacao.');
+}
+
+carregar();
+</script>
+</body>
+</html>
